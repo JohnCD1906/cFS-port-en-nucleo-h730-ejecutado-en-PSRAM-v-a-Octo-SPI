@@ -1,0 +1,200 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file     : main.c
+  * @brief    : MI APP - Bring-up phase 1 (clon de Test_LED con banner propio)
+  * @target   : STM32H730IBT6Q
+  * @desc     : Validación del pipeline compilación → grabación → ejecución
+  *             desde PSRAM @ 0x90000000 (cargado vía Boot App externa).
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+
+#include "main.h"
+
+/* USER CODE BEGIN Includes */
+#include <string.h>
+/* USER CODE END Includes */
+
+extern UART_HandleTypeDef huart8;
+
+/* USER CODE BEGIN PV */
+/* USER CODE END PV */
+
+void SystemClock_Config(void);
+static void MPU_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_UART8_Init(void);
+/* USER CODE BEGIN PFP */
+void test_clocks(void);
+/* USER CODE END PFP */
+
+int main(void)
+{
+  /* USER CODE BEGIN 1 */
+
+  /* USER CODE END 1 */
+
+  MPU_Config();
+
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+  /* USER CODE END Init */
+
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+  /* USER CODE END SysInit */
+
+  MX_GPIO_Init();
+  MX_UART8_Init();
+
+  /* USER CODE BEGIN 2 */
+  uart_printf("\r\n=================================================\r\n");
+  uart_printf("=== MI cFS APP - Bring-up phase 1 ===\r\n");
+  uart_printf("=================================================\r\n");
+  uart_printf("-> Si ves esto, mi toolchain (linker + .ioc + build)\r\n");
+  uart_printf("   esta validada y mi binario reemplazo a Test_LED.\r\n");
+  uart_printf("-> main()    @ 0x%08lX  (debe empezar con 0x90)\r\n",
+              (unsigned long)(uintptr_t)main);
+  uart_printf("-> SystemCoreClock = %lu Hz\r\n",
+              (unsigned long)SystemCoreClock);
+  uart_printf("=================================================\r\n\r\n");
+
+  HAL_Delay(500);
+  test_clocks();
+  /* USER CODE END 2 */
+
+  uint32_t tick = 0;
+  while (1)
+  {
+    HAL_Delay(1000);
+    HAL_GPIO_TogglePin(GPIOE, LED1_Pin);
+    HAL_GPIO_TogglePin(GPIOE, LED2_Pin);
+    /* USER CODE BEGIN WHILE */
+    uart_printf("[%lu] alive from MY app on PSRAM\r\n", (unsigned long)tick++);
+
+    /* USER CODE END WHILE */
+  }
+}
+
+/* test_clocks — copiado de Test_LED para mantener paridad */
+void test_clocks(void)
+{
+    uint32_t timeout;
+    uint8_t hse_ok = 0, lse_ok = 0;
+
+    RCC->CR |= RCC_CR_HSEON;
+    timeout = 1000000;
+    while (!(RCC->CR & RCC_CR_HSERDY) && --timeout);
+    hse_ok = (RCC->CR & RCC_CR_HSERDY) ? 1 : 0;
+    uart_printf("HSE: %s (CR=0x%08lX)\r\n",
+                hse_ok ? "OK - HSERDY set" : "FAIL - timeout", RCC->CR);
+
+    PWR->CR1 |= PWR_CR1_DBP;
+    while (!(PWR->CR1 & PWR_CR1_DBP));
+    RCC->BDCR = (RCC->BDCR & ~RCC_BDCR_LSEDRV_Msk)
+               | (0x01UL << RCC_BDCR_LSEDRV_Pos);
+    RCC->BDCR |= RCC_BDCR_LSEON;
+    timeout = 5000000;
+    while (!(RCC->BDCR & RCC_BDCR_LSERDY) && --timeout);
+    lse_ok = (RCC->BDCR & RCC_BDCR_LSERDY) ? 1 : 0;
+    uart_printf("LSE: %s (BDCR=0x%08lX)\r\n",
+                lse_ok ? "OK - LSERDY set" : "FAIL - timeout", RCC->BDCR);
+    uart_printf("Clock validation: HSE=%d LSE=%d\r\n", hse_ok, lse_ok);
+}
+
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  HAL_PWREx_ConfigSupply(PWR_DIRECT_SMPS_SUPPLY);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
+
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_CSI|RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
+  RCC_OscInitStruct.HSICalibrationValue = 64;
+  RCC_OscInitStruct.CSIState = RCC_CSI_ON;
+  RCC_OscInitStruct.CSICalibrationValue = 16;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) Error_Handler();
+
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
+                              |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV1;
+  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+    Error_Handler();
+}
+
+static void MX_UART8_Init(void)
+{
+  huart8.Instance = UART8;
+  huart8.Init.BaudRate = 115200;
+  huart8.Init.WordLength = UART_WORDLENGTH_8B;
+  huart8.Init.StopBits = UART_STOPBITS_1;
+  huart8.Init.Parity = UART_PARITY_NONE;
+  huart8.Init.Mode = UART_MODE_TX_RX;
+  huart8.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart8.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart8.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart8.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  huart8.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_SWAP_INIT;
+  huart8.AdvancedInit.Swap = UART_ADVFEATURE_SWAP_ENABLE;
+  if (HAL_UART_Init(&huart8) != HAL_OK) Error_Handler();
+  if (HAL_UARTEx_SetTxFifoThreshold(&huart8, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+    Error_Handler();
+  if (HAL_UARTEx_SetRxFifoThreshold(&huart8, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
+    Error_Handler();
+  if (HAL_UARTEx_EnableFifoMode(&huart8) != HAL_OK) Error_Handler();
+}
+
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  __HAL_RCC_GPIOE_CLK_ENABLE();
+  HAL_GPIO_WritePin(GPIOE, LED1_Pin|LED2_Pin, GPIO_PIN_RESET);
+  GPIO_InitStruct.Pin = LED1_Pin|LED2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+}
+
+void MPU_Config(void)
+{
+  MPU_Region_InitTypeDef MPU_InitStruct = {0};
+  HAL_MPU_Disable();
+  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+  MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+  MPU_InitStruct.BaseAddress = 0x0;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_4GB;
+  MPU_InitStruct.SubRegionDisable = 0x87;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+  MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+
+void Error_Handler(void)
+{
+  __disable_irq();
+  while (1) {}
+}
+
+#ifdef USE_FULL_ASSERT
+void assert_failed(uint8_t *file, uint32_t line) {}
+#endif

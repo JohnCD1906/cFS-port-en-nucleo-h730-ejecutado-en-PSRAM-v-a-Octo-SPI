@@ -1,0 +1,32 @@
+﻿# === STM32CubeIDE build artifacts ===
+Debug/
+Release/
+*.o
+*.d
+*.lst
+*.map
+*.elf
+*.bin
+*.hex
+*.list
+*.su
+
+# === STM32CubeIDE workspace metadata ===
+.metadata/
+.settings/
+RemoteSystemsTempFiles/
+*.launch
+
+# === IDE / OS ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+.DS_Store
+
+# === Mantener estos archivos del proyecto ===
+!.project
+!.cproject
+!.mxproject
