@@ -30,3 +30,7 @@ Thumbs.db
 !.project
 !.cproject
 !.mxproject
+
+# Linker backups y antiguos
+*.ld.bak
+STM32H730IBTXQ_FLASH.ld
