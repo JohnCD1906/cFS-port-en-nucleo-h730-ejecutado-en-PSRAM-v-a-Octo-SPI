@@ -2,143 +2,154 @@
 /**
   ******************************************************************************
   * @file     : main.c
-  * @brief    : MI APP - Bring-up phase 2.1 (FreeRTOS scheduler corriendo)
+  * @brief    : MAIN APP - cFS Phase 1: OSAL + FatFS structural
   * @target   : STM32H730IBT6Q
   ******************************************************************************
   */
 /* USER CODE END Header */
-
+/* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "FreeRTOS.h"
 #include "cmsis_os2.h"
-#include "task.h"
-#include "libs/uart_debug.h"
-#include "gpio.h"
+#include "fatfs.h"
 #include "usart.h"
-#include "osal/osal_freertos.h"
-#include "osal_test_task.h"
+#include "gpio.h"
+
+/* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
+#include "libs/uart_debug.h"
+#include "osal/osal_freertos.h"
+#include "osal_test_task.h"
 /* USER CODE END Includes */
 
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+
 /* USER CODE BEGIN PV */
-osThreadId_t blinkTaskHandle;
-const osThreadAttr_t blinkTask_attributes = {
-  .name = "blinkTask",
-  .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
-};
 /* USER CODE END PV */
 
+/* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-
+static void MPU_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
-void StartBlinkTask(void *argument);
 /* USER CODE END PFP */
 
-/*int main(void)
-{
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
 
-    SCB->VTOR = 0x90000000UL;
+/* USER CODE END 0 */
 
-    __enable_irq();
-
-
-    HAL_Init();
-    SystemClock_Config();
-
-    MX_GPIO_Init();
-    MX_UART8_Init();
-
-
-    uart_printf("\r\n=== MAIN APP ===\r\n");
-
-
-    osKernelInitialize();
-    uart_printf("[1] osKernelInitialize OK\r\n");
-
-    blinkTaskHandle = osThreadNew(StartBlinkTask, NULL, &blinkTask_attributes);
-    if (blinkTaskHandle == NULL) {
-        uart_printf("[2] osThreadNew FAIL\r\n");
-        Error_Handler();
-    }
-    uart_printf("[2] osThreadNew OK (handle=%p)\r\n", (void*)blinkTaskHandle);
-
-
-    osKernelStart();
-
-
-    uart_printf("[!] osKernelStart retornó — Error_Handler\r\n");
-    Error_Handler();
-}*/
-
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
-    SCB->VTOR = 0x90000000UL;
-    __enable_irq();
 
-    HAL_Init();
-    SystemClock_Config();
+  /* USER CODE BEGIN 1 */
+  /* VTOR a PSRAM: tabla de vectores vive en 0x90000000 (mapeada vía OctoSPI)  */
+  SCB->VTOR = 0x90000000UL;
+  __enable_irq();
+  /* USER CODE END 1 */
 
-    MX_GPIO_Init();
-    MX_UART8_Init();
+  /* MPU Configuration--------------------------------------------------------*/
+  /* MPU deshabilitada durante bring-up cFS. Con caches off no hace falta y
+     la config autogenerada de CubeMX bloquea acceso a PSRAM por defecto.
+     Se reactivará cuando habilitemos I-cache/D-cache.                         */
+  /* MPU_Config(); */
 
-    uart_printf("\r\n=== MAIN APP - cFS Phase 1: OSAL ===\r\n");
+  /* MCU Configuration--------------------------------------------------------*/
 
-    /* OSAL antes del scheduler */
-    osKernelInitialize();
-    uart_printf("[1] osKernelInitialize OK\r\n");
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-    if (OS_API_Init() != OS_SUCCESS) {
-        uart_printf("[!] OS_API_Init FAIL\r\n");
-        Error_Handler();
-    }
-    uart_printf("[2] OS_API_Init OK\r\n");
+  /* USER CODE BEGIN Init */
 
-    /* Crear tarea de prueba OSAL */
-    osal_test_create();
+  /* USER CODE END Init */
 
-    /* Arrancar scheduler */
-    uart_printf("[3] osKernelStart...\r\n");
-    osKernelStart();
+  /* Configure the system clock */
+  SystemClock_Config();
 
-    uart_printf("[!] osKernelStart retorno\r\n");
-    Error_Handler();
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_UART8_Init();
+  MX_FATFS_Init();
+
+  /* USER CODE BEGIN 2 */
+  uart_printf("\r\n=== MAIN APP - cFS Phase 1: OSAL + FatFS structural ===\r\n");
+
+  /* OSAL antes del scheduler */
+  osKernelInitialize();
+  uart_printf("[1] osKernelInitialize OK\r\n");
+
+  if (OS_API_Init() != OS_SUCCESS) {
+      uart_printf("[!] OS_API_Init FAIL\r\n");
+      Error_Handler();
+  }
+  uart_printf("[2] OS_API_Init OK\r\n");
+
+  uart_printf("[3] FatFS estructural presente (RAM disk no montado todavia)\r\n");
+
+  /* Crear tarea de prueba OSAL */
+  osal_test_create();
+
+  /* Arrancar scheduler */
+  uart_printf("[4] osKernelStart...\r\n");
+  /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  uart_printf("[!] osKernelStart retorno\r\n");
+  Error_Handler();
+  while (1)
+  {
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+  }
+  /* USER CODE END 3 */
 }
 
-/* USER CODE BEGIN 4 */
-
-/* ──────────────────────────────────────────────────────────────────
- * StartBlinkTask — tarea de prueba del scheduler
- * Toggle de LEDs cada 1 s + log por UART con tick count
- * ────────────────────────────────────────────────────────────────── */
-void StartBlinkTask(void *argument)
-{
-    uint32_t tick = 0;
-    uart_printf("[blinkTask] Tarea arrancada, scheduler vivo!\r\n");
-
-    for (;;)
-    {
-        HAL_GPIO_TogglePin(GPIOE, LED1_Pin);
-        HAL_GPIO_TogglePin(GPIOE, LED2_Pin);
-        uart_printf("[blinkTask] tick %lu (osTick=%lu)\r\n",
-                    (unsigned long)tick++,
-                    (unsigned long)osKernelGetTickCount());
-        osDelay(1000);   /* 1 segundo via FreeRTOS, NO HAL_Delay */
-    }
-}
-
-
-/* USER CODE END 4 */
-
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
+  /** Supply configuration update enable */
   HAL_PWREx_ConfigSupply(PWR_DIRECT_SMPS_SUPPLY);
+
+  /** Configure the main internal regulator output voltage */
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_CSI|RCC_OSCILLATORTYPE_HSI;
@@ -147,7 +158,10 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.CSIState = RCC_CSI_ON;
   RCC_OscInitStruct.CSICalibrationValue = 16;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) Error_Handler();
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
@@ -159,10 +173,23 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV1;
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;
+
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  {
     Error_Handler();
+  }
 }
 
+/* USER CODE BEGIN 4 */
+/* (Sin StartBlinkTask: usamos osal_test_task como en versión previa) */
+/* USER CODE END 4 */
+
+ /* MPU Configuration */
+
+void MPU_Config(void)
+{
+
+}
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -175,9 +202,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void Error_Handler(void)
 {
   __disable_irq();
-  while (1) {}
+  while (1)
+  {
+  }
 }
 
+/* USER CODE BEGIN 5 */
+/* FreeRTOS hooks */
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
 {
     (void)xTask;
@@ -196,7 +227,10 @@ void vApplicationMallocFailedHook(void)
         HAL_Delay(100);
     }
 }
+/* USER CODE END 5 */
 
 #ifdef USE_FULL_ASSERT
-void assert_failed(uint8_t *file, uint32_t line) {}
-#endif
+void assert_failed(uint8_t *file, uint32_t line)
+{
+}
+#endif /* USE_FULL_ASSERT */
