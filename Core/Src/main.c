@@ -21,6 +21,7 @@
 #include "libs/uart_debug.h"
 #include "osal/osal_freertos.h"
 #include "osal_test_task.h"
+#include "psp/psp_stm32h730.h"     /* ← NUEVO */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -110,11 +111,12 @@ int main(void)
 
   uart_printf("[3] FatFS estructural presente (RAM disk no montado todavia)\r\n");
 
-  /* Crear tarea de prueba OSAL */
-  osal_test_create();
+  /* Fase 1: PSP toma control — crea tareas via PSP_AppTable / osal_test */
+  uart_printf("[4] Lanzando CFE_PSP_Main...\r\n");
+  CFE_PSP_Main();
 
   /* Arrancar scheduler */
-  uart_printf("[4] osKernelStart...\r\n");
+  uart_printf("[5] osKernelStart...\r\n");
   /* USER CODE END 2 */
 
   /* Init scheduler */
