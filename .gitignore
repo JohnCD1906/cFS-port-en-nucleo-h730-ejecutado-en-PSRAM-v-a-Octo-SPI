@@ -34,3 +34,7 @@ Thumbs.db
 # Linker backups y antiguos
 *.ld.bak
 STM32H730IBTXQ_FLASH.ld
+
+# CubeIDE backups automaticos al regenerar codigo
+Core/Inc/Backup/
+Core/Src/Backup/
