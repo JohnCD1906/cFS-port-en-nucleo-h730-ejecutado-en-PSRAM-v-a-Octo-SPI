@@ -9,9 +9,10 @@
 
 #include "psp/psp_stm32h730.h"
 #include "osal/osal_freertos.h"
-#include "osal_test_task.h"
+//#include "osal_test_task.h"
 #include "osal/osal_freertos_fs.h"   /* NUEVO Fase 2 */
 #include "cfe_default_files.h"        /* NUEVO Fase 2 */
+#include "cfe/cfe_es_stm32.h"   /* NUEVO Fase 3 */
 
 #include "stm32h7xx_hal.h"
 #include "FreeRTOS.h"
@@ -167,11 +168,14 @@ void CFE_PSP_Main(void)
             OS_printf("PSP:   [%d] %s\n", i, PSP_AppTable[i].name);
     }
 
-    /* 4. Fase 1: arrancar tarea de prueba en lugar de CFE_ES_Main() */
-    OS_printf("PSP: Lanzando osal_test_task (Fase 1)\n");
-    osal_test_create();
+    /* 4. Fase 3: ceder control a cFE Executive Services.
+         *    ES parsea /cf/startup.scr y arranca las apps de PSP_AppTable[].
+         *    En Fase 3 la tabla esta vacia, asi que ES intentara arrancar
+         *    DC_MOTOR_AppMain y fallara con "no en PSP_AppTable" — esperado.   */
+        OS_printf("PSP: Cediendo control a CFE_ES_Main (Fase 3)\n");
+        CFE_ES_Main(s_boot_type, 0, 0, CFE_PLATFORM_ES_NONVOL_STARTUP_FILE);
 
-    OS_printf("PSP: Inicializacion completa.\n");
+        OS_printf("PSP: CFE_ES_Main retorno — inicializacion completa.\n");
 }
 
 /* ══════════════════════════════════════════════════════════════════
