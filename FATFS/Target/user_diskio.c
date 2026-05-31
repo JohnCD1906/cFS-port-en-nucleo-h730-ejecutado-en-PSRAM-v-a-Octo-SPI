@@ -36,10 +36,17 @@
 #include <string.h>
 #include "ff_gen_drv.h"
 
-/* Private typedef -----------------------------------------------------------*/
-/* Private define ------------------------------------------------------------*/
+/* RAM disk en DTCM del STM32H730 — direccion fija por arquitectura.
+ * IMPORTANTE: estas constantes deben coincidir con PSP_RAMDISK_ADDR
+ * y PSP_RAMDISK_SIZE en Core/Inc/psp/psp_stm32h730.h                       */
+#define RAMDISK_BASE_ADDR   0x20000000UL   /* DTCM */
+#define RAMDISK_SIZE_BYTES  (64u * 1024u)  /* 64 KB */
+#define RAMDISK_SECTOR_SIZE 512u
+#define RAMDISK_SECTOR_CNT  (RAMDISK_SIZE_BYTES / RAMDISK_SECTOR_SIZE)  /* 128 */
 
-/* Private variables ---------------------------------------------------------*/
+/* Puntero al inicio del RAM disk en DTCM */
+static volatile uint8_t * const s_ramdisk = (uint8_t *)RAMDISK_BASE_ADDR;
+
 /* Disk status */
 static volatile DSTATUS Stat = STA_NOINIT;
 
@@ -80,10 +87,13 @@ DSTATUS USER_initialize (
 	BYTE pdrv           /* Physical drive nmuber to identify the drive */
 )
 {
-  /* USER CODE BEGIN INIT */
-    Stat = STA_NOINIT;
-    return Stat;
-  /* USER CODE END INIT */
+	/* USER CODE BEGIN INIT */
+	    /* DTCM siempre esta presente y lista. No requiere init de HW.
+	     * Simplemente marcamos disk listo.                                       */
+	    (void)pdrv;
+	    Stat = 0;   /* 0 = sin flags de error, disco listo */
+	    return Stat;
+	  /* USER CODE END INIT */
 }
 
 /**
@@ -95,10 +105,10 @@ DSTATUS USER_status (
 	BYTE pdrv       /* Physical drive number to identify the drive */
 )
 {
-  /* USER CODE BEGIN STATUS */
-    Stat = STA_NOINIT;
-    return Stat;
-  /* USER CODE END STATUS */
+	/* USER CODE BEGIN STATUS */
+	    (void)pdrv;
+	    return Stat;
+	  /* USER CODE END STATUS */
 }
 
 /**
@@ -116,9 +126,18 @@ DRESULT USER_read (
 	UINT count      /* Number of sectors to read */
 )
 {
-  /* USER CODE BEGIN READ */
-    return RES_OK;
-  /* USER CODE END READ */
+	/* USER CODE BEGIN READ */
+	    (void)pdrv;
+
+	    if (Stat & STA_NOINIT) return RES_NOTRDY;
+	    if (buff == NULL)      return RES_PARERR;
+	    if (sector + count > RAMDISK_SECTOR_CNT) return RES_PARERR;
+
+	    memcpy((void *)buff,
+	           (const void *)(s_ramdisk + (sector * RAMDISK_SECTOR_SIZE)),
+	           count * RAMDISK_SECTOR_SIZE);
+	    return RES_OK;
+	  /* USER CODE END READ */
 }
 
 /**
@@ -137,10 +156,18 @@ DRESULT USER_write (
 	UINT count          /* Number of sectors to write */
 )
 {
-  /* USER CODE BEGIN WRITE */
-  /* USER CODE HERE */
-    return RES_OK;
-  /* USER CODE END WRITE */
+	/* USER CODE BEGIN WRITE */
+	    (void)pdrv;
+
+	    if (Stat & STA_NOINIT) return RES_NOTRDY;
+	    if (buff == NULL)      return RES_PARERR;
+	    if (sector + count > RAMDISK_SECTOR_CNT) return RES_PARERR;
+
+	    memcpy((void *)(s_ramdisk + (sector * RAMDISK_SECTOR_SIZE)),
+	           (const void *)buff,
+	           count * RAMDISK_SECTOR_SIZE);
+	    return RES_OK;
+	  /* USER CODE END WRITE */
 }
 #endif /* _USE_WRITE == 1 */
 
@@ -158,10 +185,42 @@ DRESULT USER_ioctl (
 	void *buff      /* Buffer to send/receive control data */
 )
 {
-  /* USER CODE BEGIN IOCTL */
-    DRESULT res = RES_ERROR;
-    return res;
-  /* USER CODE END IOCTL */
+	/* USER CODE BEGIN IOCTL */
+	    (void)pdrv;
+	    DRESULT res = RES_ERROR;
+
+	    if (Stat & STA_NOINIT) return RES_NOTRDY;
+
+	    switch (cmd)
+	    {
+	        case CTRL_SYNC:
+	            /* DTCM es RAM directa, no hay cache que flushear */
+	            res = RES_OK;
+	            break;
+
+	        case GET_SECTOR_COUNT:
+	            *(DWORD *)buff = RAMDISK_SECTOR_CNT;
+	            res = RES_OK;
+	            break;
+
+	        case GET_SECTOR_SIZE:
+	            *(WORD *)buff = RAMDISK_SECTOR_SIZE;
+	            res = RES_OK;
+	            break;
+
+	        case GET_BLOCK_SIZE:
+	            /* tamaño minimo de borrado en bloques de sector */
+	            *(DWORD *)buff = 1;
+	            res = RES_OK;
+	            break;
+
+	        default:
+	            res = RES_PARERR;
+	            break;
+	    }
+
+	    return res;
+	  /* USER CODE END IOCTL */
 }
 #endif /* _USE_IOCTL == 1 */
 

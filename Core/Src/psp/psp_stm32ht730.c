@@ -10,6 +10,8 @@
 #include "psp/psp_stm32h730.h"
 #include "osal/osal_freertos.h"
 #include "osal_test_task.h"
+#include "osal/osal_freertos_fs.h"   /* NUEVO Fase 2 */
+#include "cfe_default_files.h"        /* NUEVO Fase 2 */
 
 #include "stm32h7xx_hal.h"
 #include "FreeRTOS.h"
@@ -66,21 +68,64 @@ static void psp_detect_boot_type(void)
 }
 
 /* ══════════════════════════════════════════════════════════════════
- * PSP_FS_Init — STUB EN FASE 1
- *
- * En Fase 2 implementaremos:
- *   - OS_FS_Init()
- *   - OS_FS_Mount("0:/", 1)
- *   - OS_mkdir("/cf", 0)
- *   - OS_FS_WriteFile("/cf/startup.scr", startup_scr, ...)
- *   - OS_FS_WriteFile("/cf/dc_motor.tbl", cfe_dc_motor_tbl, ...)
+ * PSP_FS_Init — Fase 2: monta el RAM disk en DTCM y puebla /cf/
  * ══════════════════════════════════════════════════════════════════ */
 int32 PSP_FS_Init(void)
 {
-    OS_printf("PSP: PSP_FS_Init STUB — RAM disk no montado (Fase 1)\n");
-    OS_printf("PSP:   (DTCM @ 0x%08lX reservada para Fase 2: %u KB)\n",
-              (unsigned long)PSP_RAMDISK_ADDR,
-              (unsigned)(PSP_RAMDISK_SIZE / 1024u));
+    int32 ret;
+
+    OS_printf("PSP: Inicializando filesystem (RAM disk %u KB en DTCM @ 0x%08lX)\n",
+              (unsigned)(PSP_RAMDISK_SIZE / 1024u),
+              (unsigned long)PSP_RAMDISK_ADDR);
+
+    /* 1. Inicializar tabla interna de FDs */
+    ret = OS_FS_Init();
+    if (ret != OS_SUCCESS)
+    {
+        OS_printf("PSP ERROR: OS_FS_Init fallo (%ld)\n", (long)ret);
+        return OS_ERROR;
+    }
+
+    /* 2. Formatear + montar (en Fase 2 siempre formateamos al inicio,
+     *    incluso en warm reset, porque DTCM puede tener basura).         */
+    int cold = 1;  /* TODO Fase X: usar s_boot_type para preservar en warm */
+    ret = OS_FS_Mount("0:/", cold);
+    if (ret != OS_SUCCESS)
+    {
+        OS_printf("PSP ERROR: no se pudo montar el RAM disk\n");
+        return OS_ERROR;
+    }
+
+    /* 3. Crear directorio /cf */
+    ret = OS_mkdir("/cf", 0);
+    if (ret != OS_SUCCESS)
+    {
+        OS_printf("PSP ERROR: no se pudo crear /cf\n");
+        return OS_ERROR;
+    }
+    OS_printf("PSP: /cf creado\n");
+
+    /* 4. Escribir startup.scr desde el array const en .rodata */
+    ret = OS_FS_WriteFile("/cf/startup.scr",
+                           startup_scr, startup_scr_len);
+    if (ret != OS_SUCCESS)
+    {
+        OS_printf("PSP ERROR: no se pudo escribir startup.scr\n");
+        return OS_ERROR;
+    }
+    OS_printf("PSP: /cf/startup.scr escrito (%u bytes)\n",
+              (unsigned)startup_scr_len);
+
+    /* 5. Escribir dc_motor.tbl */
+    ret = OS_FS_WriteFile("/cf/dc_motor.tbl",
+                           cfe_dc_motor_tbl, cfe_dc_motor_tbl_len);
+    if (ret == OS_SUCCESS)
+    {
+        OS_printf("PSP: /cf/dc_motor.tbl escrito (%u bytes)\n",
+                  (unsigned)cfe_dc_motor_tbl_len);
+    }
+
+    OS_printf("PSP: Filesystem listo.\n");
     return OS_SUCCESS;
 }
 
