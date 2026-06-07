@@ -42,7 +42,7 @@ static void hw_pwm_init(void)
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
     OS_printf("[HW] TIM1 CH1/CH2 started @ PWM\n");
 #else
-    OS_printf("[HW-SIM] PWM init (simulacion, sin TIM1 fisico)\n");
+    OS_printf("[HW-SIM] PWM init (simulation, no physical TIM1)\n");
 #endif
 }
 
@@ -252,7 +252,6 @@ void DC_PWMTask(void)
  * ══════════════════════════════════════════════════════════════════ */
 void DC_MOTOR_AppMain(void)
 {
-	OS_printf("[DC_MOTOR] AppMain ENTRY - tarea corriendo\n");  // ← AGREGAR
     OS_TaskDelay(100);
 
     uint32_t run_status = CFE_ES_RunStatus_APP_RUN;

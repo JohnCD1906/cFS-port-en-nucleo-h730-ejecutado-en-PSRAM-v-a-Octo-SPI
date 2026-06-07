@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include "osal/osal_freertos.h"
 #include "libs/uart_debug.h"   /* tu uart_printf */
+#include "port_debug.h"   /* PORT_DBG macro */
 /*
  * [FREERTOS] En STM32, los headers de FreeRTOS vienen de CubeMX.
  * En simulación Linux los usamos como stubs.
@@ -68,6 +69,18 @@ static OS_mutex_record_t OS_mutex_table[OS_MAX_MUTEXES];
 static SemaphoreHandle_t OS_table_mutex = NULL; /* [FREERTOS] handle */
 
 /*
+ * Mutex dedicado para serializar OS_printf entre tareas.
+ * Sin esto, los OS_printf de varias tareas se entremezclan caracter
+ * por caracter en el UART (logs ilegibles).
+ *
+ * El flag s_uart_ready arranca en 0: antes de OS_API_Init el mutex no
+ * existe, asi que OS_printf imprime sin lock (single-thread, pre-scheduler).
+ * Tras crear el mutex, s_uart_ready=1 y OS_printf se serializa.
+ */
+static SemaphoreHandle_t OS_uart_mutex = NULL;
+static volatile uint8    s_uart_ready  = 0;
+
+/*
  * [FREERTOS] xSemaphoreTake / xSemaphoreGive son las funciones de FreeRTOS
  * para tomar y liberar un semáforo/mutex.
  * portMAX_DELAY = esperar indefinidamente (valor especial de FreeRTOS).
@@ -100,10 +113,17 @@ int32 OS_API_Init(void)
         return OS_ERROR;
     }
 
-    OS_printf("OSAL: Inicializado sobre FreeRTOS\n");
-    OS_printf("OSAL: Max tasks=%d, queues=%d, mutexes=%d\n",
-              OS_MAX_TASKS, OS_MAX_QUEUES, OS_MAX_MUTEXES);
-    return OS_SUCCESS;
+    OS_uart_mutex = xSemaphoreCreateMutex();
+        if (OS_uart_mutex == NULL)
+        {
+            return OS_ERROR;
+        }
+        s_uart_ready = 1;
+
+        PORT_DBG("OSAL initialized on FreeRTOS\n");
+        PORT_DBG("OSAL: max tasks=%d, queues=%d, mutexes=%d\n",
+                 OS_MAX_TASKS, OS_MAX_QUEUES, OS_MAX_MUTEXES);
+        return OS_SUCCESS;
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -249,12 +269,12 @@ int32 OS_TaskCreate(osal_id_t         *task_id,
         &handle                       /* handle de salida */
     );
 
-    if (result != pdPASS || handle == NULL) /* [FREERTOS] pdPASS = 1 */
-    {
-        OS_printf("OSAL ERROR: xTaskCreate falló '%s' "
-                  "(heap insuficiente o prioridad inválida)\n", task_name);
-        return OS_ERROR;
-    }
+    if (result != pdPASS || handle == NULL)
+        {
+            OS_printf("OSAL ERROR: xTaskCreate failed for '%s' "
+                      "(out of heap or invalid priority)\n", task_name);
+            return OS_ERROR;
+        }
 
     /* Registrar en tabla OSAL */
     OS_LOCK_TABLES();
@@ -265,11 +285,11 @@ int32 OS_TaskCreate(osal_id_t         *task_id,
 
     *task_id = (osal_id_t)slot;
 
-    OS_printf("OSAL: Tarea '%s' OK "
-              "(slot=%d, osal_prio=%u→freertos_prio=%u, stack=%u words)\n",
-              task_name, (int)slot,
-              (unsigned)priority, (unsigned)freertos_prio,
-              (unsigned)stack_words);
+    PORT_DBG("Task '%s' OK "
+             "(slot=%d, osal_prio=%u->freertos_prio=%u, stack=%u words)\n",
+             task_name, (int)slot,
+             (unsigned)priority, (unsigned)freertos_prio,
+             (unsigned)stack_words);
     return OS_SUCCESS;
 }
 
@@ -354,11 +374,11 @@ int32 OS_QueueCreate(osal_id_t        *queue_id,
         (UBaseType_t)queue_depth,        /* profundidad */
         (UBaseType_t)data_size           /* tamaño de cada ítem en bytes */
     );
-    if (handle == NULL) /* [FREERTOS] NULL = fallo de heap */
-    {
-        OS_printf("OSAL ERROR: xQueueCreate falló '%s'\n", queue_name);
-        return OS_ERROR;
-    }
+    if (handle == NULL)
+        {
+            OS_printf("OSAL ERROR: xQueueCreate failed for '%s'\n", queue_name);
+            return OS_ERROR;
+        }
 
     OS_LOCK_TABLES();
     OS_queue_table[slot].handle    = handle;
@@ -370,10 +390,10 @@ int32 OS_QueueCreate(osal_id_t        *queue_id,
 
     *queue_id = (osal_id_t)slot;
 
-    OS_printf("OSAL: Cola '%s' OK (slot=%d, depth=%u, item=%u bytes)\n",
-              queue_name, (int)slot,
-              (unsigned)queue_depth, (unsigned)data_size);
-    return OS_SUCCESS;
+    PORT_DBG("Queue '%s' OK (slot=%d, depth=%u, item=%u bytes)\n",
+                 queue_name, (int)slot,
+                 (unsigned)queue_depth, (unsigned)data_size);
+        return OS_SUCCESS;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -560,8 +580,8 @@ int32 OS_MutexCreate(osal_id_t  *mutex_id,
     OS_UNLOCK_TABLES();
 
     *mutex_id = (osal_id_t)slot;
-    OS_printf("OSAL: Mutex '%s' OK (slot=%d)\n", mutex_name, (int)slot);
-    return OS_SUCCESS;
+        PORT_DBG("Mutex '%s' OK (slot=%d)\n", mutex_name, (int)slot);
+        return OS_SUCCESS;
 }
 
 int32 OS_MutexLock(osal_id_t mutex_id)
@@ -622,6 +642,25 @@ void OS_printf(const char *fmt, ...)
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    /* En STM32H730: salida por UART8 vía uart_puts (polling) */
-    uart_puts(buf);
+    /*
+     * Serializar el acceso al UART solo si:
+     *   1. El mutex ya existe (s_uart_ready), y
+     *   2. El scheduler esta corriendo (si no, xSemaphoreTake no debe
+     *      llamarse — mismo problema que vTaskDelay pre-scheduler).
+     *
+     * xTaskGetSchedulerState() devuelve taskSCHEDULER_RUNNING solo
+     * despues de osKernelStart(). Antes, imprimimos sin lock (es
+     * single-thread de todas formas).
+     */
+    if (s_uart_ready &&
+        xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)
+    {
+        xSemaphoreTake(OS_uart_mutex, portMAX_DELAY);
+        uart_puts(buf);
+        xSemaphoreGive(OS_uart_mutex);
+    }
+    else
+    {
+        uart_puts(buf);
+    }
 }

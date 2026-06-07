@@ -159,8 +159,8 @@ static CFE_Status_t EVS_SendEventImpl(CFE_ES_AppId_t      AppId,
         EVS_Unlock();
         vsnprintf(msg, sizeof(msg), Spec, Args);
         OS_printf("[EVS/UNREG/%s] EID=%u %s\n",
-                  EVS_TypeToStr(EventType),
-                  (unsigned)EventID, msg);
+                          EVS_TypeToStr(EventType),
+                          (unsigned)EventID, msg);
         return CFE_SUCCESS;
     }
 
@@ -212,13 +212,13 @@ CFE_Status_t CFE_EVS_EarlyInit(void)
     status = OS_MutexCreate(&CFE_EVS_Global.Mutex, "EVS_MTX", 0u);
     if (status != OS_SUCCESS)
     {
-        OS_printf("EVS FATAL: no se pudo crear mutex (%ld)\n", (long)status);
+    	OS_printf("EVS FATAL: could not create mutex (%ld)\n", (long)status);
         return CFE_STATUS_EXTERNAL_RESOURCE_FAIL;
     }
 
     CFE_EVS_Global.Initialized = true;
 
-    OS_printf("EVS: inicializado correctamente\n");
+    OS_printf("EVS: initialized\n");
     return CFE_SUCCESS;
 }
 
@@ -247,7 +247,7 @@ CFE_Status_t CFE_EVS_Register(const CFE_EVS_EventFilter_t *Filters,
     /* Obtener AppId del contexto actual */
     if (CFE_ES_GetAppID(&AppId) != CFE_SUCCESS)
     {
-        OS_printf("EVS: Register fallo — no AppID para tarea actual\n");
+    	OS_printf("EVS: Register failed - no AppID for current task\n");
         return CFE_EVS_APP_NOT_REGISTERED;
     }
 
@@ -258,7 +258,7 @@ CFE_Status_t CFE_EVS_Register(const CFE_EVS_EventFilter_t *Filters,
     if (EVS_FindAppRecord(AppId) != NULL)
     {
         EVS_Unlock();
-        OS_printf("EVS: App AppID=%u ya registrada\n", (unsigned)AppId);
+        OS_printf("EVS: AppID=%u already registered\n", (unsigned)AppId);
         return CFE_SUCCESS;
     }
 
@@ -276,7 +276,7 @@ CFE_Status_t CFE_EVS_Register(const CFE_EVS_EventFilter_t *Filters,
     if (slot == CFE_EVS_MAX_APPS)
     {
         EVS_Unlock();
-        OS_printf("EVS: Register fallo — no hay slots libres\n");
+        OS_printf("EVS: Register failed - no free slots\n");
         return CFE_EVS_APP_NOT_REGISTERED;
     }
 
@@ -316,8 +316,8 @@ CFE_Status_t CFE_EVS_Register(const CFE_EVS_EventFilter_t *Filters,
 
     EVS_Unlock();
 
-    OS_printf("EVS: App '%s' registrada (slot=%u, filtros=%u)\n",
-              evs_rec->AppName, (unsigned)slot, (unsigned)evs_rec->NumFilters);
+    OS_printf("EVS: App '%s' registered (slot=%u, filters=%u)\n",
+                  evs_rec->AppName, (unsigned)slot, (unsigned)evs_rec->NumFilters);
 
     return CFE_SUCCESS;
 }

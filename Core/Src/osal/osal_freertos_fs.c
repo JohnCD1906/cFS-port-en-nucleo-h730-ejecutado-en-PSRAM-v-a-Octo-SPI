@@ -16,6 +16,7 @@
 #include "ff.h"
 #include <string.h>
 #include <stdio.h>
+#include "port_debug.h"   /* PORT_DBG macro */
 
 /* Tabla de file descriptors abiertos */
 static OS_FDTableEntry_t OS_FDTable[OS_MAX_FDS];
@@ -53,7 +54,7 @@ int32 OS_FS_Init(void)
 {
     memset(OS_FDTable, 0, sizeof(OS_FDTable));
     s_fs_mounted = 0;
-    OS_printf("OSAL_FS: Tablas inicializadas (max_fds=%d)\n", OS_MAX_FDS);
+    PORT_DBG("FS tables initialized (max_fds=%d)\n", OS_MAX_FDS);
     return OS_SUCCESS;
 }
 
@@ -73,26 +74,24 @@ int32 OS_FS_Mount(const char *path, int format)
              * f_mkfs(path, opt, au, work, len)                                   */
             fr = f_mkfs("0:", FM_FAT | FM_SFD, 0, work_buf, sizeof(work_buf));
 
-        if (fr != FR_OK)
-        {
-            OS_printf("OSAL_FS ERROR: f_mkfs fallo (fr=%d)\n", (int)fr);
-            return OS_ERROR;
-        }
-        OS_printf("OSAL_FS: RAM disk formateado (FAT12)\n");
-    }
+            if (fr != FR_OK)
+                    {
+                        OS_printf("OSAL_FS ERROR: f_mkfs failed (fr=%d)\n", (int)fr);
+                        return OS_ERROR;
+                    }
+                    PORT_DBG("RAM disk formatted (FAT12)\n");
+                }
 
-    /* f_mount registra el objeto FATFS para el volumen "0:".
-     * Segundo parametro: 1 = mount inmediato (detecta errores aqui).    */
-    fr = f_mount(&s_fatfs_obj, "0:", 1);
-    if (fr != FR_OK)
-    {
-        OS_printf("OSAL_FS ERROR: f_mount fallo (fr=%d)\n", (int)fr);
-        return OS_ERROR;
-    }
+                fr = f_mount(&s_fatfs_obj, "0:", 1);
+                if (fr != FR_OK)
+                {
+                    OS_printf("OSAL_FS ERROR: f_mount failed (fr=%d)\n", (int)fr);
+                    return OS_ERROR;
+                }
 
-    s_fs_mounted = 1;
-    OS_printf("OSAL_FS: Volumen '0:/' montado correctamente\n");
-    return OS_SUCCESS;
+                s_fs_mounted = 1;
+                PORT_DBG("Volume '0:/' mounted\n");
+                return OS_SUCCESS;
 }
 
 /* ═════════════════════════════════════════════════════════════════
@@ -113,10 +112,10 @@ int32 OS_open(const char *path, int32 access, uint32 mode)
         if (!OS_FDTable[i].in_use) { slot = i; break; }
     }
     if (slot < 0)
-    {
-        OS_printf("OSAL_FS ERROR: no hay FDs libres\n");
-        return OS_FS_ERR_NO_FREE_FDS;
-    }
+        {
+            OS_printf("OSAL_FS ERROR: no free FDs\n");
+            return OS_FS_ERR_NO_FREE_FDS;
+        }
 
     char fatfs_path[OS_MAX_PATH_LEN + 2];
     if (translate_path(path, fatfs_path, sizeof(fatfs_path)) != OS_SUCCESS)
@@ -140,11 +139,11 @@ int32 OS_open(const char *path, int32 access, uint32 mode)
 
     FRESULT fr = f_open(&OS_FDTable[slot].fatfs_fil, fatfs_path, fatfs_flags);
     if (fr != FR_OK)
-    {
-        OS_printf("OSAL_FS ERROR: f_open('%s') fallo (fr=%d)\n",
-                  fatfs_path, (int)fr);
-        return OS_ERROR;
-    }
+        {
+            OS_printf("OSAL_FS ERROR: f_open('%s') failed (fr=%d)\n",
+                      fatfs_path, (int)fr);
+            return OS_ERROR;
+        }
 
     strncpy(OS_FDTable[slot].path, path, OS_MAX_PATH_LEN - 1);
     OS_FDTable[slot].flags  = (uint32)access;
@@ -252,11 +251,11 @@ int32 OS_mkdir(const char *path, uint32 access)
 
     FRESULT fr = f_mkdir(fatfs_path);
     if (fr != FR_OK && fr != FR_EXIST)
-    {
-        OS_printf("OSAL_FS ERROR: f_mkdir('%s') fallo (fr=%d)\n",
-                  fatfs_path, (int)fr);
-        return OS_ERROR;
-    }
+        {
+            OS_printf("OSAL_FS ERROR: f_mkdir('%s') failed (fr=%d)\n",
+                      fatfs_path, (int)fr);
+            return OS_ERROR;
+        }
 
     return OS_SUCCESS;
 }
@@ -308,20 +307,20 @@ int32 OS_FS_WriteFile(const char *path, const uint8 *data, uint32 length)
 {
     int32 fd = OS_open(path, OS_WRITE_ONLY, 0);
     if (fd < 0)
-    {
-        OS_printf("OSAL_FS ERROR: WriteFile('%s') open fallo\n", path);
-        return OS_ERROR;
-    }
+        {
+            OS_printf("OSAL_FS ERROR: WriteFile('%s') open failed\n", path);
+            return OS_ERROR;
+        }
 
-    int32 written = OS_write(fd, data, length);
-    OS_close(fd);
+        int32 written = OS_write(fd, data, length);
+        OS_close(fd);
 
-    if (written < 0 || (uint32)written != length)
-    {
-        OS_printf("OSAL_FS ERROR: WriteFile('%s') write incompleto (%ld/%lu)\n",
-                  path, (long)written, (unsigned long)length);
-        return OS_ERROR;
-    }
+        if (written < 0 || (uint32)written != length)
+        {
+            OS_printf("OSAL_FS ERROR: WriteFile('%s') incomplete write (%ld/%lu)\n",
+                      path, (long)written, (unsigned long)length);
+            return OS_ERROR;
+        }
 
     return OS_SUCCESS;
 }

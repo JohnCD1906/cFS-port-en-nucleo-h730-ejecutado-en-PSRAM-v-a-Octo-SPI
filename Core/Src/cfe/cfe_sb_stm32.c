@@ -129,7 +129,7 @@ CFE_Status_t CFE_SB_EarlyInit(void)
     status = OS_MutexCreate(&CFE_SB_Global.Mutex, "SB_MTX", 0u);
     if (status != OS_SUCCESS)
     {
-        OS_printf("SB FATAL: no se pudo crear mutex (%ld)\n", (long)status);
+    	OS_printf("SB FATAL: could not create mutex (%ld)\n", (long)status);
         return CFE_SB_BAD_ARGUMENT;
     }
 
@@ -143,17 +143,16 @@ CFE_Status_t CFE_SB_EarlyInit(void)
                                      CFE_PLATFORM_SB_BUF_MEMORY_BYTES);
     if (status != CFE_SUCCESS)
     {
-        OS_printf("SB WARN: pool de buffers no disponible (%ld)\n",
-                  (long)status);
+    	OS_printf("SB WARN: buffer pool unavailable (%ld)\n", (long)status);
         /* No es fatal — seguimos sin pool */
     }
 
     CFE_SB_Global.Initialized = true;
 
-    OS_printf("SB: inicializado (max_pipes=%u, max_msgids=%u, pool=%u bytes)\n",
-              (unsigned)CFE_PLATFORM_SB_MAX_PIPES,
-              (unsigned)CFE_PLATFORM_SB_MAX_MSG_IDS,
-              (unsigned)CFE_PLATFORM_SB_BUF_MEMORY_BYTES);
+    OS_printf("SB: initialized (max_pipes=%u, max_msgids=%u, pool=%u bytes)\n",
+                  (unsigned)CFE_PLATFORM_SB_MAX_PIPES,
+                  (unsigned)CFE_PLATFORM_SB_MAX_MSG_IDS,
+                  (unsigned)CFE_PLATFORM_SB_BUF_MEMORY_BYTES);
 
     return CFE_SUCCESS;
 }
@@ -203,7 +202,7 @@ CFE_Status_t CFE_SB_CreatePipe(CFE_SB_PipeId_t *PipeIdPtr,
     if (slot == CFE_PLATFORM_SB_MAX_PIPES)
     {
         SB_Unlock();
-        OS_printf("SB: CreatePipe '%s' fallo — sin slots\n", PipeName);
+        OS_printf("SB: CreatePipe '%s' failed - no slots\n", PipeName);
         return CFE_SB_MAX_PIPES_MET;
     }
 
@@ -221,8 +220,8 @@ CFE_Status_t CFE_SB_CreatePipe(CFE_SB_PipeId_t *PipeIdPtr,
                              CFE_SB_MAX_MSG_SIZE, 0u);
     if (status != OS_SUCCESS)
     {
-        OS_printf("SB: CreatePipe '%s' — OS_QueueCreate fallo (%ld)\n",
-                  PipeName, (long)status);
+    	OS_printf("SB: CreatePipe '%s' - OS_QueueCreate failed (%ld)\n",
+    	                  PipeName, (long)status);
         return CFE_SB_MAX_PIPES_MET;
     }
 
@@ -241,8 +240,8 @@ CFE_Status_t CFE_SB_CreatePipe(CFE_SB_PipeId_t *PipeIdPtr,
 
     SB_Unlock();
 
-    OS_printf("SB: Pipe '%s' creada (id=%lu, depth=%u)\n",
-              PipeName, (unsigned long)slot, (unsigned)Depth);
+    OS_printf("SB: Pipe '%s' created (id=%lu, depth=%u)\n",
+                  PipeName, (unsigned long)slot, (unsigned)Depth);
 
     return CFE_SUCCESS;
 }
@@ -298,7 +297,7 @@ CFE_Status_t CFE_SB_DeletePipe(CFE_SB_PipeId_t PipeId)
     /* Eliminar la cola OSAL */
     OS_QueueDelete(prec->QueueId);
 
-    OS_printf("SB: Pipe '%s' eliminada\n", prec->Name);
+    OS_printf("SB: Pipe '%s' deleted\n", prec->Name);
 
     memset(prec, 0, sizeof(*prec));
 
@@ -327,8 +326,8 @@ CFE_Status_t CFE_SB_Subscribe(CFE_SB_MsgId_t  MsgId,
     if (prec == NULL)
     {
         SB_Unlock();
-        OS_printf("SB: Subscribe — pipe %lu no encontrada\n",
-                  (unsigned long)PipeId);
+        OS_printf("SB: Subscribe - pipe %lu not found\n",
+                          (unsigned long)PipeId);
         return CFE_SB_PIPE_NOT_FOUND;
     }
 
@@ -336,8 +335,8 @@ CFE_Status_t CFE_SB_Subscribe(CFE_SB_MsgId_t  MsgId,
     if (route == NULL)
     {
         SB_Unlock();
-        OS_printf("SB: Subscribe — routing table llena (MsgId=0x%04X)\n",
-                  (unsigned)MsgId);
+        OS_printf("SB: Subscribe - routing table full (MsgId=0x%04X)\n",
+                          (unsigned)MsgId);
         return CFE_SB_MAX_MSGS_MET;
     }
 
@@ -347,8 +346,8 @@ CFE_Status_t CFE_SB_Subscribe(CFE_SB_MsgId_t  MsgId,
         if (route->Dests[j].PipeId == PipeId)
         {
             SB_Unlock();
-            OS_printf("SB: Subscribe — pipe '%s' ya suscrita a MsgId=0x%04X\n",
-                      prec->Name, (unsigned)MsgId);
+            OS_printf("SB: Subscribe - pipe '%s' already subscribed to MsgId=0x%04X\n",
+                                  prec->Name, (unsigned)MsgId);
             return CFE_SUCCESS;
         }
     }
@@ -356,8 +355,8 @@ CFE_Status_t CFE_SB_Subscribe(CFE_SB_MsgId_t  MsgId,
     if (route->NumDests >= CFE_PLATFORM_SB_MAX_DEST_PER_PKT)
     {
         SB_Unlock();
-        OS_printf("SB: Subscribe — max destinos para MsgId=0x%04X\n",
-                  (unsigned)MsgId);
+        OS_printf("SB: Subscribe - max destinations for MsgId=0x%04X\n",
+                          (unsigned)MsgId);
         return CFE_SB_MAX_MSGS_MET;
     }
 
@@ -369,8 +368,8 @@ CFE_Status_t CFE_SB_Subscribe(CFE_SB_MsgId_t  MsgId,
 
     SB_Unlock();
 
-    OS_printf("SB: Pipe '%s' suscrita a MsgId=0x%04X\n",
-              prec->Name, (unsigned)MsgId);
+    OS_printf("SB: Pipe '%s' subscribed to MsgId=0x%04X\n",
+                  prec->Name, (unsigned)MsgId);
 
     return CFE_SUCCESS;
 }
@@ -470,8 +469,8 @@ CFE_Status_t CFE_SB_TransmitMsg(CFE_MSG_Message_t *MsgPtr,
         /* Verificar message limit */
         if (route->Dests[i].MsgCount >= route->Dests[i].MsgLimit)
         {
-            OS_printf("SB: TransmitMsg — pipe '%s' llena (MsgId=0x%04X)\n",
-                      prec->Name, (unsigned)MsgPtr->MsgId);
+        	OS_printf("SB: TransmitMsg - pipe '%s' full (MsgId=0x%04X)\n",
+        	                      prec->Name, (unsigned)MsgPtr->MsgId);
             continue;
         }
 
@@ -491,8 +490,8 @@ CFE_Status_t CFE_SB_TransmitMsg(CFE_MSG_Message_t *MsgPtr,
         }
         else
         {
-            OS_printf("SB: TransmitMsg — OS_QueuePut a '%s' fallo (%ld)\n",
-                      prec->Name, (long)status);
+        	OS_printf("SB: TransmitMsg - OS_QueuePut to '%s' failed (%ld)\n",
+        	                      prec->Name, (long)status);
         }
     }
 

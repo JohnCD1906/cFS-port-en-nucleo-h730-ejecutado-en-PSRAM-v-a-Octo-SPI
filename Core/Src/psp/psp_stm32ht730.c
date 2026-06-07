@@ -14,6 +14,7 @@
 #include "cfe_default_files.h"        /* NUEVO Fase 2 */
 #include "cfe/cfe_es_stm32.h"   /* NUEVO Fase 3 */
 #include "app/dc_motor_app.h"   /* NUEVO Fase 6 */
+#include "port_debug.h"   /* PORT_DBG macro */
 
 #include "stm32h7xx_hal.h"
 #include "FreeRTOS.h"
@@ -52,9 +53,9 @@ static void psp_detect_boot_type(void)
     {
         s_boot_type = CFE_PSP_RST_TYPE_PROCESSOR;
         s_reset_area->reset_count++;
-        OS_printf("PSP: Warm start (reset #%lu, last_err=%ld)\n",
-                  (unsigned long)s_reset_area->reset_count,
-                  (long)s_reset_area->last_error);
+        PORT_DBG("Warm start (reset #%lu, last_err=%ld)\n",
+                 (unsigned long)s_reset_area->reset_count,
+                 (long)s_reset_area->last_error);
     }
     else
     {
@@ -65,7 +66,7 @@ static void psp_detect_boot_type(void)
         s_reset_area->last_error  = 0;
         memset((void *)s_reset_area->last_app, 0,
                sizeof(s_reset_area->last_app));
-        OS_printf("PSP: Cold start (primer encendido o SRAM D3 fria)\n");
+        PORT_DBG("Cold start (power-on, or D3 SRAM was cold)\n");
     }
     s_reset_area->boot_type = s_boot_type;
 }
@@ -77,58 +78,52 @@ int32 PSP_FS_Init(void)
 {
     int32 ret;
 
-    OS_printf("PSP: Inicializando filesystem (RAM disk %u KB en DTCM @ 0x%08lX)\n",
-              (unsigned)(PSP_RAMDISK_SIZE / 1024u),
-              (unsigned long)PSP_RAMDISK_ADDR);
+    PORT_DBG("Initializing filesystem (RAM disk %u KB on DTCM @ 0x%08lX)\n",
+             (unsigned)(PSP_RAMDISK_SIZE / 1024u),
+             (unsigned long)PSP_RAMDISK_ADDR);
 
-    /* 1. Inicializar tabla interna de FDs */
     ret = OS_FS_Init();
     if (ret != OS_SUCCESS)
     {
-        OS_printf("PSP ERROR: OS_FS_Init fallo (%ld)\n", (long)ret);
+        OS_printf("PSP FATAL: OS_FS_Init failed (%ld)\n", (long)ret);
         return OS_ERROR;
     }
 
-    /* 2. Formatear + montar (en Fase 2 siempre formateamos al inicio,
-     *    incluso en warm reset, porque DTCM puede tener basura).         */
-    int cold = 1;  /* TODO Fase X: usar s_boot_type para preservar en warm */
+    int cold = 1;
     ret = OS_FS_Mount("0:/", cold);
     if (ret != OS_SUCCESS)
     {
-        OS_printf("PSP ERROR: no se pudo montar el RAM disk\n");
+        OS_printf("PSP FATAL: could not mount RAM disk\n");
         return OS_ERROR;
     }
 
-    /* 3. Crear directorio /cf */
     ret = OS_mkdir("/cf", 0);
     if (ret != OS_SUCCESS)
     {
-        OS_printf("PSP ERROR: no se pudo crear /cf\n");
+        OS_printf("PSP FATAL: could not create /cf\n");
         return OS_ERROR;
     }
-    OS_printf("PSP: /cf creado\n");
+    PORT_DBG("/cf created\n");
 
-    /* 4. Escribir startup.scr desde el array const en .rodata */
     ret = OS_FS_WriteFile("/cf/startup.scr",
                            startup_scr, startup_scr_len);
     if (ret != OS_SUCCESS)
     {
-        OS_printf("PSP ERROR: no se pudo escribir startup.scr\n");
+        OS_printf("PSP FATAL: could not write startup.scr\n");
         return OS_ERROR;
     }
-    OS_printf("PSP: /cf/startup.scr escrito (%u bytes)\n",
-              (unsigned)startup_scr_len);
+    PORT_DBG("/cf/startup.scr written (%u bytes)\n",
+             (unsigned)startup_scr_len);
 
-    /* 5. Escribir dc_motor.tbl */
     ret = OS_FS_WriteFile("/cf/dc_motor.tbl",
                            cfe_dc_motor_tbl, cfe_dc_motor_tbl_len);
     if (ret == OS_SUCCESS)
     {
-        OS_printf("PSP: /cf/dc_motor.tbl escrito (%u bytes)\n",
-                  (unsigned)cfe_dc_motor_tbl_len);
+        PORT_DBG("/cf/dc_motor.tbl written (%u bytes)\n",
+                 (unsigned)cfe_dc_motor_tbl_len);
     }
 
-    OS_printf("PSP: Filesystem listo.\n");
+    PORT_DBG("Filesystem ready\n");
     return OS_SUCCESS;
 }
 
@@ -140,44 +135,37 @@ int32 PSP_FS_Init(void)
  * ══════════════════════════════════════════════════════════════════ */
 void CFE_PSP_Main(void)
 {
-    OS_printf("\n");
-    OS_printf("===========================================\n");
-    OS_printf("PSP %s — cFS Port Fase 1\n", CFE_PSP_CPU_NAME);
-    OS_printf("Spacecraft ID: %u\n", (unsigned)CFE_PSP_SPACECRAFT_ID);
-    OS_printf("Processor ID:  %u\n", (unsigned)CFE_PSP_CPU_ID);
-    OS_printf("===========================================\n");
+    PORT_DBG("\n");
+    PORT_DBG("===========================================\n");
+    PORT_DBG("PSP %s - cFS port\n", CFE_PSP_CPU_NAME);
+    PORT_DBG("Spacecraft ID: %u\n", (unsigned)CFE_PSP_SPACECRAFT_ID);
+    PORT_DBG("Processor ID:  %u\n", (unsigned)CFE_PSP_CPU_ID);
+    PORT_DBG("===========================================\n");
 
-    /* 1. Detectar tipo de reset (cold vs warm) */
     psp_detect_boot_type();
 
-    /* 2. Inicializar filesystem (stub Fase 1, real Fase 2) */
     if (PSP_FS_Init() != OS_SUCCESS)
     {
-        OS_printf("PSP FATAL: filesystem no disponible\n");
+        OS_printf("PSP FATAL: filesystem unavailable\n");
         CFE_PSP_Panic(-1);
         return;
     }
 
-    /* 3. Listar apps registradas (vacio en Fase 1) */
-    OS_printf("PSP: PSP_AppTable[]:\n");
+    PORT_DBG("PSP_AppTable[]:\n");
     if (PSP_AppTable[0].name == NULL)
     {
-        OS_printf("PSP:   (vacia — Fase 1, sin apps registradas)\n");
+        PORT_DBG("  (empty - no apps registered)\n");
     }
     else
     {
         for (int i = 0; PSP_AppTable[i].name != NULL; i++)
-            OS_printf("PSP:   [%d] %s\n", i, PSP_AppTable[i].name);
+            PORT_DBG("  [%d] %s\n", i, PSP_AppTable[i].name);
     }
 
+    PORT_DBG("Handing control to CFE_ES_Main\n");
+    CFE_ES_Main(s_boot_type, 0, 0, CFE_PLATFORM_ES_NONVOL_STARTUP_FILE);
 
-    /* 4. Fase 3: ceder control a cFE Executive Services.
-         *    ES parsea /cf/startup.scr y arranca las apps de PSP_AppTable[].
-         *    En Fase 3 la tabla esta vacia, asi que ES intentara arrancar
-         *    DC_MOTOR_AppMain y fallara con "no en PSP_AppTable" — esperado.   */
-        OS_printf("PSP: Cediendo control a CFE_ES_Main (Fase 3)\n");
-        CFE_ES_Main(s_boot_type, 0, 0, CFE_PLATFORM_ES_NONVOL_STARTUP_FILE);
-        OS_printf("PSP: CFE_ES_Main retorno — inicializacion completa.\n");
+    PORT_DBG("CFE_ES_Main returned - init complete\n");
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -236,7 +224,7 @@ void CFE_PSP_Panic(int32 error_code)
     if (s_reset_area->magic == PSP_RESET_MAGIC)
         s_reset_area->last_error = error_code;
 
-    OS_printf("PSP PANIC: error_code=%ld - reiniciando...\n",
+    OS_printf("PSP PANIC: error_code=%ld - restarting...\n",
               (long)error_code);
     HAL_Delay(100);
     HAL_NVIC_SystemReset();
@@ -251,11 +239,12 @@ void CFE_PSP_Restart(uint32 reset_type)
         if (reset_type == CFE_PSP_RST_TYPE_POWERON)
             s_reset_area->magic = 0u;
     }
-    OS_printf("PSP: Restart tipo=%lu\n", (unsigned long)reset_type);
+    OS_printf("PSP: restart type=%lu\n", (unsigned long)reset_type);
     HAL_Delay(100);
     HAL_NVIC_SystemReset();
     while(1) {}
 }
+
 
 /* ══════════════════════════════════════════════════════════════════
  * LOOKUP DE APPS

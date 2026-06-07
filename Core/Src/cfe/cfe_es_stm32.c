@@ -191,7 +191,7 @@ bool CFE_ES_RunLoop(uint32 *RunStatus)
     }
     else
     {
-        CFE_ES_WriteToSysLog("CFE_ES_RunLoop: no AppID para la tarea actual\n");
+    	CFE_ES_WriteToSysLog("CFE_ES_RunLoop: no AppID for current task\n");
         result = false;
     }
 
@@ -217,8 +217,8 @@ void CFE_ES_ExitApp(uint32 ExitStatus)
     {
         rec->AppState      = CFE_ES_AppState_STOPPED;
         rec->ControlRequest = ExitStatus;
-        CFE_ES_WriteToSysLog("ES: App '%s' llamó ExitApp (status=%lu)\n",
-                              rec->AppName, (unsigned long)ExitStatus);
+        CFE_ES_WriteToSysLog("ES: App '%s' called ExitApp (status=%lu)\n",
+                                      rec->AppName, (unsigned long)ExitStatus);
     }
     CFE_ES_UnlockSharedData();
 
@@ -252,8 +252,8 @@ void CFE_ES_WaitForStartupSync(uint32 TimeOutMilliseconds)
     {
         if (waited >= TimeOutMilliseconds)
         {
-            CFE_ES_WriteToSysLog("ES: WaitForStartupSync timeout (%lu ms)\n",
-                                  (unsigned long)TimeOutMilliseconds);
+        	CFE_ES_WriteToSysLog("ES: WaitForStartupSync timeout (%lu ms)\n",
+        	                                  (unsigned long)TimeOutMilliseconds);
             break;
         }
         OS_TaskDelay(CFE_PLATFORM_ES_STARTUP_SYNC_POLL_MSEC);
@@ -304,8 +304,8 @@ int32 CFE_ES_ParseFileEntry(const char **TokenList, uint32 NumTokens)
     /* Validación mínima de tokens — igual que en el original NASA */
     if (NumTokens < 7u)
     {
-        CFE_ES_WriteToSysLog("ES: ParseFileEntry: pocos tokens (%lu)\n",
-                              (unsigned long)NumTokens);
+    	CFE_ES_WriteToSysLog("ES: ParseFileEntry: too few tokens (%lu)\n",
+    	                              (unsigned long)NumTokens);
         return CFE_ES_ERR_APP_CREATE;
     }
 
@@ -320,8 +320,8 @@ int32 CFE_ES_ParseFileEntry(const char **TokenList, uint32 NumTokens)
     /* Solo soportamos CFE_APP por ahora (CFE_LIB ignorado) */
     if (strncmp(EntryType, "CFE_APP", 7) != 0)
     {
-        CFE_ES_WriteToSysLog("ES: ParseFileEntry: tipo '%s' no soportado\n",
-                              EntryType);
+    	CFE_ES_WriteToSysLog("ES: ParseFileEntry: type '%s' not supported\n",
+    	                              EntryType);
         return CFE_SUCCESS;  /* no es error, simplemente ignorar */
     }
 
@@ -337,9 +337,9 @@ int32 CFE_ES_ParseFileEntry(const char **TokenList, uint32 NumTokens)
     AppEntry = CFE_PSP_FindAppEntry(EntryPoint);
     if (AppEntry == NULL)
     {
-        CFE_ES_WriteToSysLog(
-            "ES: ParseFileEntry: EntryPoint '%s' no en PSP_AppTable\n",
-            EntryPoint);
+    	CFE_ES_WriteToSysLog(
+    	            "ES: ParseFileEntry: EntryPoint '%s' not in PSP_AppTable\n",
+    	            EntryPoint);
         return CFE_ES_ERR_APP_CREATE;
     }
 
@@ -359,7 +359,7 @@ int32 CFE_ES_ParseFileEntry(const char **TokenList, uint32 NumTokens)
     if (slot == CFE_PLATFORM_ES_MAX_APPLICATIONS)
     {
         CFE_ES_UnlockSharedData();
-        CFE_ES_WriteToSysLog("ES: ParseFileEntry: no hay slots de app libres\n");
+        CFE_ES_WriteToSysLog("ES: ParseFileEntry: no free app slots\n");
         return CFE_ES_ERR_APP_CREATE;
     }
 
@@ -405,8 +405,8 @@ int32 CFE_ES_ParseFileEntry(const char **TokenList, uint32 NumTokens)
         CFE_ES_UnlockSharedData();
 
         CFE_ES_WriteToSysLog(
-            "ES: ParseFileEntry: OS_TaskCreate('%s') fallo (%ld)\n",
-            AppName, (long)Status);
+                    "ES: ParseFileEntry: OS_TaskCreate('%s') failed (%ld)\n",
+                    AppName, (long)Status);
         return CFE_ES_ERR_APP_CREATE;
     }
 
@@ -416,10 +416,9 @@ int32 CFE_ES_ParseFileEntry(const char **TokenList, uint32 NumTokens)
     CFE_ES_UnlockSharedData();
 
     CFE_ES_WriteToSysLog(
-        "ES: App '%s' arrancada (slot=%lu, prio=%lu, stack=%lu)\n",
-        AppName, (unsigned long)slot,
-        (unsigned long)Priority, (unsigned long)StackSize);
-
+            "ES: App '%s' started (slot=%lu, prio=%lu, stack=%lu)\n",
+            AppName, (unsigned long)slot,
+            (unsigned long)Priority, (unsigned long)StackSize);
     return CFE_SUCCESS;
 }
 
@@ -451,16 +450,16 @@ void CFE_ES_StartApplications(uint32 ResetType, const char *StartFilePath)
 
     if (StartFilePath == NULL)
     {
-        CFE_ES_WriteToSysLog("ES: StartApplications: path NULL\n");
+    	CFE_ES_WriteToSysLog("ES: StartApplications: NULL path\n");
         return;
     }
 
-    CFE_ES_WriteToSysLog("ES: Leyendo startup script: %s\n", StartFilePath);
+    CFE_ES_WriteToSysLog("ES: Reading startup script: %s\n", StartFilePath);
 
     fd = OS_open(StartFilePath, OS_READ_ONLY, 0);
     if (fd < 0)
     {
-        CFE_ES_WriteToSysLog("ES: No se pudo abrir %s\n", StartFilePath);
+    	CFE_ES_WriteToSysLog("ES: Could not open %s\n", StartFilePath);
         return;
     }
 
@@ -535,16 +534,16 @@ process_line:
 
         if (result != CFE_SUCCESS)
         {
-            CFE_ES_WriteToSysLog(
-                "ES: Error arrancando app (linea: '%s') RC=%ld\n",
-                ptr, (long)result);
+        	CFE_ES_WriteToSysLog(
+        	                "ES: Error starting app (line: '%s') RC=%ld\n",
+        	                ptr, (long)result);
         }
     }
 
     OS_close(fd);
-    CFE_ES_WriteToSysLog("ES: StartApplications completo "
-                          "(%lu apps registradas)\n",
-                          (unsigned long)CFE_ES_Global.RegisteredApps);
+    CFE_ES_WriteToSysLog("ES: StartApplications complete "
+                              "(%lu apps registered)\n",
+                              (unsigned long)CFE_ES_Global.RegisteredApps);
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -567,42 +566,83 @@ process_line:
 void CFE_ES_Main(uint32 StartType, uint32 StartSubtype,
                  uint32 ModeId, const char *StartFilePath)
 {
-	/* ── Arrancar las apps del startup.scr ─────────────────────── */
-	    /* Lee y parsea el startup script, y crea cada app como tarea OSAL.
-	     * Las tareas quedan creadas pero NO ejecutan hasta osKernelStart().  */
-	    CFE_ES_StartApplications(StartType, StartFilePath);
+    int32 status;
 
-	    /* ── Sync de apps OMITIDO antes del scheduler ──────────────────
-	     *
-	     * IMPORTANTE: en este port, CFE_ES_Main() corre en el contexto de
-	     * main(), ANTES de osKernelStart(). Por tanto las apps creadas por
-	     * StartApplications no pueden ejecutarse ni cambiar de estado
-	     * todavia — el scheduler no esta corriendo.
-	     *
-	     * Esperar aqui con OS_TaskDelay() (como hacia el codigo original)
-	     * es inutil (el timeout siempre se cumple) Y peligroso: llamar a
-	     * vTaskDelay() antes de vTaskStartScheduler() deja las listas
-	     * internas de tareas de FreeRTOS en estado inconsistente, lo que
-	     * impide que el scheduler despache correctamente la unica tarea de
-	     * usuario al arrancar (sintoma: la app no corre salvo que exista
-	     * una segunda tarea "ancla").
-	     *
-	     * Por eso saltamos directo a OPERATIONAL. Las apps inicializaran
-	     * y transicionaran de estado normalmente cuando el scheduler corra.
-	     *
-	     * NOTA: el modelo 100% correcto seria convertir CFE_ES_Main en una
-	     * tarea dentro del scheduler (como en cFS real). Eso queda como
-	     * refactorizacion futura.                                          */
+    (void)StartSubtype;
+    (void)ModeId;
 
-	    CFE_ES_Global.SystemState = CFE_ES_SystemState_APPS_INIT;
-	    CFE_ES_WriteToSysLog("ES: estado APPS_INIT\n");
+    /* ── Clear global state ────────────────────────────────────── */
+    memset(&CFE_ES_Global, 0, sizeof(CFE_ES_Global));
+    CFE_ES_Global.SystemState = CFE_ES_SystemState_EARLY_INIT;
+    CFE_ES_Global.LastAppId   = 0u;
+    CFE_ES_Global.LastPoolId  = 0u;
 
-	    CFE_ES_Global.SystemState = CFE_ES_SystemState_OPERATIONAL;
-	    CFE_ES_WriteToSysLog(
-	        "ES: estado OPERATIONAL — %lu app(s) activa(s)\n",
-	        (unsigned long)CFE_ES_Global.RegisteredApps);
-	}
+    /* ── Create shared-data mutex ──────────────────────────────── */
+    status = OS_MutexCreate(&CFE_ES_Global.SharedDataMutex,
+                             "ES_MUTEX", 0u);
+    if (status != OS_SUCCESS)
+    {
+        OS_printf("ES FATAL: could not create mutex (%ld)\n",
+                  (long)status);
+        CFE_PSP_Panic(-1);
+        return;
+    }
 
+    CFE_ES_WriteToSysLog("ES: CFE_ES_Main starting (StartType=%lu)\n",
+                          (unsigned long)StartType);
+
+    /* ── Transition to CORE_STARTUP ────────────────────────────── */
+    CFE_ES_Global.SystemState = CFE_ES_SystemState_CORE_STARTUP;
+    CFE_ES_WriteToSysLog("ES: state CORE_STARTUP\n");
+
+    /* ── Initialize EVS ────────────────────────────────────────── */
+    if (CFE_EVS_EarlyInit() != CFE_SUCCESS)
+        OS_printf("ES WARN: EVS init failed - continuing without EVS\n");
+
+    /* ── Initialize SB ─────────────────────────────────────────── */
+    if (CFE_SB_EarlyInit() != CFE_SUCCESS)
+        OS_printf("ES WARN: SB init failed - messaging unavailable\n");
+
+    /* ── Transition to CORE_READY ──────────────────────────────── */
+    CFE_ES_Global.SystemState = CFE_ES_SystemState_CORE_READY;
+    CFE_ES_WriteToSysLog("ES: state CORE_READY\n");
+
+    /* ── Start the apps from startup.scr ───────────────────────── */
+    /* Reads and parses the startup script and creates each app as an
+     * OSAL task. The tasks are created but do NOT run until
+     * osKernelStart() is called.                                       */
+    CFE_ES_StartApplications(StartType, StartFilePath);
+
+    /* ── App sync SKIPPED before the scheduler ─────────────────────
+     *
+     * IMPORTANT: in this port, CFE_ES_Main() runs in the context of
+     * main(), BEFORE osKernelStart(). Therefore the apps created by
+     * StartApplications cannot run or change state yet - the scheduler
+     * is not running.
+     *
+     * Waiting here with OS_TaskDelay() (as the original code did) is
+     * useless (the timeout always expires) AND dangerous: calling
+     * vTaskDelay() before vTaskStartScheduler() leaves FreeRTOS's
+     * internal task lists in an inconsistent state, which prevents the
+     * scheduler from correctly dispatching the only user task at boot
+     * (symptom: the app does not run unless a second "anchor" task
+     * exists).
+     *
+     * So we jump straight to OPERATIONAL. The apps will initialize and
+     * transition state normally once the scheduler runs.
+     *
+     * NOTE: the fully correct model would be to turn CFE_ES_Main into a
+     * task inside the scheduler (as in real cFS). That is left as a
+     * future refactor.                                                 */
+
+    CFE_ES_Global.SystemState = CFE_ES_SystemState_APPS_INIT;
+    CFE_ES_WriteToSysLog("ES: state APPS_INIT\n");
+
+    CFE_ES_Global.SystemState = CFE_ES_SystemState_OPERATIONAL;
+    CFE_ES_WriteToSysLog(
+        "ES: state OPERATIONAL - %lu app(s) active\n",
+        (unsigned long)CFE_ES_Global.RegisteredApps);
+}
 /* ══════════════════════════════════════════════════════════════════
  * MEMORY POOL
  *
@@ -644,7 +684,7 @@ static CFE_Status_t pool_create_impl(CFE_ES_MemHandle_t *PoolID,
 
     if (slot == CFE_PLATFORM_ES_MAX_MEMORY_POOLS)
     {
-        CFE_ES_WriteToSysLog("ES: PoolCreate: sin slots disponibles\n");
+    	CFE_ES_WriteToSysLog("ES: PoolCreate: no slots available\n");
         return CFE_ES_ERR_APP_REGISTER;
     }
 
@@ -672,9 +712,9 @@ static CFE_Status_t pool_create_impl(CFE_ES_MemHandle_t *PoolID,
 
     *PoolID = (CFE_ES_MemHandle_t)slot;
 
-    CFE_ES_WriteToSysLog("ES: Pool creado (slot=%lu, @%p, %lu bytes)\n",
-                          (unsigned long)slot, MemPtr,
-                          (unsigned long)Size);
+    CFE_ES_WriteToSysLog("ES: Pool created (slot=%lu, @%p, %lu bytes)\n",
+                              (unsigned long)slot, MemPtr,
+                              (unsigned long)Size);
     return CFE_SUCCESS;
 }
 
@@ -760,8 +800,8 @@ int32 CFE_ES_GetPoolBuf(CFE_ES_MemPoolBuf_t *BufPtr,
 
     if (prec->UseMutex) OS_MutexUnlock(prec->Mutex);
 
-    CFE_ES_WriteToSysLog("ES: GetPoolBuf: sin memoria libre (%lu bytes)\n",
-                          (unsigned long)Size);
+    CFE_ES_WriteToSysLog("ES: GetPoolBuf: out of free memory (%lu bytes)\n",
+                              (unsigned long)Size);
     return CFE_ES_ERR_MEM_BLOCK_SIZE;
 }
 

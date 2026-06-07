@@ -14,6 +14,7 @@
 #include "fatfs.h"
 #include "usart.h"
 #include "gpio.h"
+#include "port_debug.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -46,7 +47,7 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MPU_Config(void);
+//static void MPU_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 /* USER CODE END PFP */
@@ -97,27 +98,24 @@ int main(void)
   MX_FATFS_Init();
 
   /* USER CODE BEGIN 2 */
-  uart_printf("\r\n=== MAIN APP - cFS Phase 1: OSAL + FatFS structural ===\r\n");
+    PORT_DBG("\n=== cFS on STM32H730 / PSRAM ===\n");
 
-  /* OSAL antes del scheduler */
-  osKernelInitialize();
-  uart_printf("[1] osKernelInitialize OK\r\n");
+    /* OSAL before the scheduler */
+    osKernelInitialize();
+    PORT_DBG("osKernelInitialize OK\n");
 
-  if (OS_API_Init() != OS_SUCCESS) {
-      uart_printf("[!] OS_API_Init FAIL\r\n");
-      Error_Handler();
-  }
-  uart_printf("[2] OS_API_Init OK\r\n");
+    if (OS_API_Init() != OS_SUCCESS) {
+        OS_printf("MAIN FATAL: OS_API_Init failed\n");
+        Error_Handler();
+    }
+    PORT_DBG("OS_API_Init OK\n");
 
-  uart_printf("[3] FatFS estructural presente (RAM disk no montado todavia)\r\n");
+    /* PSP takes control: mounts RAM disk, runs CFE_ES_Main, creates app tasks */
+    PORT_DBG("Launching CFE_PSP_Main...\n");
+    CFE_PSP_Main();
 
-  /* Fase 1: PSP toma control — crea tareas via PSP_AppTable / osal_test */
-  uart_printf("[4] Lanzando CFE_PSP_Main...\r\n");
-  CFE_PSP_Main();
-
-  /* Arrancar scheduler */
-  uart_printf("[5] osKernelStart...\r\n");
-  /* USER CODE END 2 */
+    PORT_DBG("Starting scheduler (osKernelStart)\n");
+    /* USER CODE END 2 */
 
   /* Init scheduler */
   osKernelStart();
@@ -126,15 +124,14 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uart_printf("[!] osKernelStart retorno\r\n");
-  Error_Handler();
-  while (1)
-  {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-  }
-  /* USER CODE END 3 */
+    OS_printf("MAIN FATAL: osKernelStart returned\n");
+    Error_Handler();
+    while (1)
+    {
+      /* USER CODE END WHILE */
+      /* USER CODE BEGIN 3 */
+    }
+    /* USER CODE END 3 */
 }
 
 /**
@@ -188,10 +185,10 @@ void SystemClock_Config(void)
 
  /* MPU Configuration */
 
-void MPU_Config(void)
+/*void MPU_Config(void)
 {
 
-}
+}*/
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
