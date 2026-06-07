@@ -169,11 +169,6 @@ void CFE_PSP_Main(void)
         for (int i = 0; PSP_AppTable[i].name != NULL; i++)
             OS_printf("PSP:   [%d] %s\n", i, PSP_AppTable[i].name);
     }
-    /* DIAGNOSTICO TEMPORAL: tarea de prueba para confirmar que el scheduler corre */
-        //osal_test_create();
-
-        //OS_printf("PSP: Cediendo control a CFE_ES_Main (Fase 3)\n");
-       // CFE_ES_Main(s_boot_type, 0, 0, CFE_PLATFORM_ES_NONVOL_STARTUP_FILE);
 
 
     /* 4. Fase 3: ceder control a cFE Executive Services.
@@ -182,7 +177,6 @@ void CFE_PSP_Main(void)
          *    DC_MOTOR_AppMain y fallara con "no en PSP_AppTable" — esperado.   */
         OS_printf("PSP: Cediendo control a CFE_ES_Main (Fase 3)\n");
         CFE_ES_Main(s_boot_type, 0, 0, CFE_PLATFORM_ES_NONVOL_STARTUP_FILE);
-        osal_test_create();
         OS_printf("PSP: CFE_ES_Main retorno — inicializacion completa.\n");
 }
 

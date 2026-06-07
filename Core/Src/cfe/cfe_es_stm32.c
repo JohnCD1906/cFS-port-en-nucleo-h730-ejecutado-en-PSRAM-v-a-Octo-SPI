@@ -567,135 +567,41 @@ process_line:
 void CFE_ES_Main(uint32 StartType, uint32 StartSubtype,
                  uint32 ModeId, const char *StartFilePath)
 {
-    int32 status;
+	/* ── Arrancar las apps del startup.scr ─────────────────────── */
+	    /* Lee y parsea el startup script, y crea cada app como tarea OSAL.
+	     * Las tareas quedan creadas pero NO ejecutan hasta osKernelStart().  */
+	    CFE_ES_StartApplications(StartType, StartFilePath);
 
-    (void)StartSubtype;
-    (void)ModeId;
+	    /* ── Sync de apps OMITIDO antes del scheduler ──────────────────
+	     *
+	     * IMPORTANTE: en este port, CFE_ES_Main() corre en el contexto de
+	     * main(), ANTES de osKernelStart(). Por tanto las apps creadas por
+	     * StartApplications no pueden ejecutarse ni cambiar de estado
+	     * todavia — el scheduler no esta corriendo.
+	     *
+	     * Esperar aqui con OS_TaskDelay() (como hacia el codigo original)
+	     * es inutil (el timeout siempre se cumple) Y peligroso: llamar a
+	     * vTaskDelay() antes de vTaskStartScheduler() deja las listas
+	     * internas de tareas de FreeRTOS en estado inconsistente, lo que
+	     * impide que el scheduler despache correctamente la unica tarea de
+	     * usuario al arrancar (sintoma: la app no corre salvo que exista
+	     * una segunda tarea "ancla").
+	     *
+	     * Por eso saltamos directo a OPERATIONAL. Las apps inicializaran
+	     * y transicionaran de estado normalmente cuando el scheduler corra.
+	     *
+	     * NOTA: el modelo 100% correcto seria convertir CFE_ES_Main en una
+	     * tarea dentro del scheduler (como en cFS real). Eso queda como
+	     * refactorizacion futura.                                          */
 
-    /* ── Limpiar estado global ─────────────────────────────────── */
-    memset(&CFE_ES_Global, 0, sizeof(CFE_ES_Global));
-    CFE_ES_Global.SystemState = CFE_ES_SystemState_EARLY_INIT;
-    CFE_ES_Global.LastAppId   = 0u;
-    CFE_ES_Global.LastPoolId  = 0u;
+	    CFE_ES_Global.SystemState = CFE_ES_SystemState_APPS_INIT;
+	    CFE_ES_WriteToSysLog("ES: estado APPS_INIT\n");
 
-    /* ── Crear mutex de datos compartidos ─────────────────────── */
-    /* En el original NASA se usa OS_MutSemCreate de OSAL completo.
-     * En STM32 usamos OS_MutexCreate de nuestro OSAL/FreeRTOS. */
-    status = OS_MutexCreate(&CFE_ES_Global.SharedDataMutex,
-                             "ES_MUTEX", 0u);
-    if (status != OS_SUCCESS)
-    {
-        OS_printf("ES FATAL: no se pudo crear mutex (%ld)\n",
-                  (long)status);
-        CFE_PSP_Panic(-1);
-        return;
-    }
-
-    CFE_ES_WriteToSysLog("ES: CFE_ES_Main iniciando (StartType=%lu)\n",
-                          (unsigned long)StartType);
-
-    /* ── Transición a CORE_STARTUP ─────────────────────────────── */
-    /* En el original aquí se crean las 5 core apps (EVS, SB, etc)
-     * como tareas separadas con CFE_ES_CreateObjects().
-     * En STM32 fase 1 saltamos ese paso — las core apps se
-     * implementarán en fases siguientes. */
-    CFE_ES_Global.SystemState = CFE_ES_SystemState_CORE_STARTUP;
-    CFE_ES_WriteToSysLog("ES: estado CORE_STARTUP\n");
-
-    /* ── Inicializar EVS ─────────────────────────────────────────── */
-    if (CFE_EVS_EarlyInit() != CFE_SUCCESS)
-        OS_printf("ES WARN: EVS init fallo — continuando sin EVS\n");
-
-    /* ── Inicializar SB ──────────────────────────────────────────── */
-    if (CFE_SB_EarlyInit() != CFE_SUCCESS)
-        OS_printf("ES WARN: SB init fallo — mensajeria no disponible\n");
-
-    /* ── Transición a CORE_READY ───────────────────────────────── */
-    CFE_ES_Global.SystemState = CFE_ES_SystemState_CORE_READY;
-    CFE_ES_WriteToSysLog("ES: estado CORE_READY\n");
-
-    /* ── Arrancar las apps del startup.scr ─────────────────────── */
-    /* Misma lógica que el original NASA:
-     *   1. Leer y parsear el startup script
-     *   2. Arrancar cada app como tarea OSAL
-     *   3. Esperar a que lleguen al estado LATE_INIT */
-    CFE_ES_StartApplications(StartType, StartFilePath);
-
-    /* ── Esperar a que las apps inicialicen ────────────────────── */
-    /* En el original NASA se usa CFE_ES_MainTaskSyncDelay().
-     * En STM32 hacemos un polling simple del estado de las apps. */
-    {
-        uint32 waited = 0u;
-        uint32 not_ready;
-        uint32 i;
-
-        while (waited < CFE_PLATFORM_ES_STARTUP_SCRIPT_TIMEOUT_MSEC)
-        {
-            not_ready = 0u;
-            CFE_ES_LockSharedData();
-            for (i = 0; i < CFE_PLATFORM_ES_MAX_APPLICATIONS; i++)
-            {
-                if (CFE_ES_Global.AppTable[i].InUse &&
-                    CFE_ES_Global.AppTable[i].AppState
-                        < CFE_ES_AppState_LATE_INIT)
-                {
-                    not_ready++;
-                }
-            }
-            CFE_ES_UnlockSharedData();
-
-            if (not_ready == 0u)
-                break;
-
-            OS_TaskDelay(CFE_PLATFORM_ES_STARTUP_SYNC_POLL_MSEC);
-            waited += CFE_PLATFORM_ES_STARTUP_SYNC_POLL_MSEC;
-        }
-
-        if (waited >= CFE_PLATFORM_ES_STARTUP_SCRIPT_TIMEOUT_MSEC)
-        {
-            CFE_ES_WriteToSysLog(
-                "ES: WARN: timeout esperando apps LATE_INIT\n");
-        }
-    }
-
-    /* ── Transición a APPS_INIT → OPERATIONAL ──────────────────── */
-    CFE_ES_Global.SystemState = CFE_ES_SystemState_APPS_INIT;
-    CFE_ES_WriteToSysLog("ES: estado APPS_INIT\n");
-
-    /* Esperar a que todas las apps estén RUNNING */
-    {
-        uint32 waited = 0u;
-        uint32 not_running;
-        uint32 i;
-
-        while (waited < CFE_PLATFORM_ES_STARTUP_SCRIPT_TIMEOUT_MSEC)
-        {
-            not_running = 0u;
-            CFE_ES_LockSharedData();
-            for (i = 0; i < CFE_PLATFORM_ES_MAX_APPLICATIONS; i++)
-            {
-                if (CFE_ES_Global.AppTable[i].InUse &&
-                    CFE_ES_Global.AppTable[i].AppState
-                        < CFE_ES_AppState_RUNNING)
-                {
-                    not_running++;
-                }
-            }
-            CFE_ES_UnlockSharedData();
-
-            if (not_running == 0u)
-                break;
-
-            OS_TaskDelay(CFE_PLATFORM_ES_STARTUP_SYNC_POLL_MSEC);
-            waited += CFE_PLATFORM_ES_STARTUP_SYNC_POLL_MSEC;
-        }
-    }
-
-    CFE_ES_Global.SystemState = CFE_ES_SystemState_OPERATIONAL;
-    CFE_ES_WriteToSysLog(
-        "ES: estado OPERATIONAL — %lu app(s) activa(s)\n",
-        (unsigned long)CFE_ES_Global.RegisteredApps);
-}
+	    CFE_ES_Global.SystemState = CFE_ES_SystemState_OPERATIONAL;
+	    CFE_ES_WriteToSysLog(
+	        "ES: estado OPERATIONAL — %lu app(s) activa(s)\n",
+	        (unsigned long)CFE_ES_Global.RegisteredApps);
+	}
 
 /* ══════════════════════════════════════════════════════════════════
  * MEMORY POOL

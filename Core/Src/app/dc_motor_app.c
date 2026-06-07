@@ -252,6 +252,7 @@ void DC_PWMTask(void)
  * ══════════════════════════════════════════════════════════════════ */
 void DC_MOTOR_AppMain(void)
 {
+	OS_printf("[DC_MOTOR] AppMain ENTRY - tarea corriendo\n");  // ← AGREGAR
     OS_TaskDelay(100);
 
     uint32_t run_status = CFE_ES_RunStatus_APP_RUN;

@@ -28,10 +28,10 @@ extern "C" {
 #define DC_RAMP_DELAY_MS    50u
 
 /* ── Tareas y pipes ──────────────────────────────────────────────── */
-#define DC_PWM_TASK_PRIO    1u
-#define DC_CTRL_TASK_PRIO   2u
-#define DC_SEQ_TASK_PRIO    3u
-#define DC_TASK_STACK       4096u
+#define DC_PWM_TASK_PRIO    120u
+#define DC_CTRL_TASK_PRIO   110u
+#define DC_SEQ_TASK_PRIO    100u
+#define DC_TASK_STACK       2048u
 
 #define DC_CMD_PIPE_DEPTH   4u
 #define DC_PWM_PIPE_DEPTH   2u
